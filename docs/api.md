@@ -32,3 +32,6 @@ Creates a user. Body requires `name` and `email`; returns `201` with the created
 
 ### PUT /users/:id
 Updates an existing user. Body may include `name`, `email`, or both. Returns the updated user, `400` if neither field is given, or `404` if the user does not exist.
+
+### DELETE /users/:id
+Deletes an existing user. Returns `204` with no body, or `404` if the user does not exist.

@@ -36,9 +36,16 @@ function updateUser(id, fields) {
   return user;
 }
 
+function deleteUser(id) {
+  const index = users.findIndex((user) => user.id === id);
+  if (index === -1) return undefined;
+  const [removed] = users.splice(index, 1);
+  return removed;
+}
+
 // Reset to the seed data. Used by the tests so each one starts clean.
 function reset() {
   seed();
 }
 
-module.exports = { listUsers, getUser, createUser, updateUser, reset };
+module.exports = { listUsers, getUser, createUser, updateUser, deleteUser, reset };
