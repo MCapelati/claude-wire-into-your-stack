@@ -286,3 +286,64 @@ Executado como `/check-conventions 8c2eb9a..HEAD`, sobre os commits da tarefa an
   `400` de `POST /users` e `PUT /users/:id` não têm teste, e um id que não é número
   (`/users/abc`) devolve `404`, e não `400`.
 - O resultado foi o esperado, e o prompt não precisou de ajuste.
+
+# Hook do projeto: lint a cada edição
+
+Arquivos: `.claude/settings.json` (escopo do projeto, vai para o git) e
+`.claude/hooks/lint-on-edit.cjs`.
+
+## As três escolhas
+
+| Escolha | Valor | Por quê |
+|---|---|---|
+| Evento | `PostToolUse` | Reagir depois que o arquivo é gravado: verificar e devolver os problemas ao Claude. Para *impedir* ações arriscadas (`PreToolUse`) já existem as regras `deny` do `settings.local.json`. |
+| Matcher | `Edit\|Write` | São as ferramentas que gravam arquivos. |
+| Comando | `node "$CLAUDE_PROJECT_DIR/.claude/hooks/lint-on-edit.cjs"` | Roda o ESLint local do projeto no arquivo editado. |
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/lint-on-edit.cjs\"",
+            "timeout": 30,
+            "statusMessage": "ESLint no arquivo editado..."
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+## O que o script faz
+
+1. Lê o JSON que o Claude Code envia pela entrada padrão e pega `tool_input.file_path`.
+2. Ignora arquivos que não são `.js`, que estão fora do projeto ou dentro de `node_modules`.
+3. Roda `eslint --fix --max-warnings 0` só nesse arquivo, usando o ESLint de
+   `node_modules` (sem `npx` e sem `jq`, para funcionar igual no Windows e no Linux). Se o
+   ESLint não estiver instalado, avisa e não bloqueia.
+4. Se sobrar erro ou aviso, termina com **exit 2**: o Claude Code devolve a saída do ESLint ao
+   Claude, que corrige na hora. Com exit 0, nada aparece.
+
+O `--max-warnings 0` faz avisos (como variável não usada) também serem cobrados.
+
+## Teste
+
+- **Pela linha de comando**, simulando a entrada do hook: arquivo limpo → exit 0; arquivo com
+  variável não usada → exit 2 com a saída do ESLint; `NOTES.md` → ignorado (exit 0).
+- **Provocando a situação de propósito:** foi adicionada `const hookTest = 'unused';` em
+  `routes/health.js` com a ferramenta Edit. O hook disparou logo após a edição e devolveu
+  `'hookTest' is assigned a value but never used (no-unused-vars)`. A linha foi removida, o
+  hook rodou de novo sem reclamar, e o arquivo voltou a ficar idêntico ao original.
+
+## Limitação
+
+O `--fix` corrige pouco neste projeto: as regras do `eslint:recommended` (ESLint 9) quase não
+têm correção automática (um `;;` ficou intacto no teste). O valor do hook está em cobrar o
+padrão de lint a cada edição, em vez de esperar o `npm run lint` ou o CI. Para formatação de
+verdade, o caminho seria adicionar o Prettier ao projeto e chamá-lo no mesmo hook.
