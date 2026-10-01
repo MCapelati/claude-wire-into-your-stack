@@ -230,3 +230,59 @@ with an endpoint change.
   isolada, repetir o pedido numa sessão nova (`/clear`).
 - Teste negativo sugerido, que **não** deve disparar a skill: *"o que o GET /users/:id retorna
   quando o usuário não existe?"*.
+
+# Comando reutilizável: `/check-conventions`
+
+Arquivo: `.claude/commands/check-conventions.md`
+
+## Para que serve
+
+Revisa as alterações do repositório contra o checklist de convenções do projeto, ou seja, as
+regras do `CLAUDE.md` mais as convenções registradas na skill `add-api-endpoint`. É uma revisão
+somente leitura: o prompt proíbe editar arquivos. É um prompt que se roda sempre antes de um
+commit ou de um merge.
+
+## Entrada (`$ARGUMENTS`)
+
+Um único valor livre: o intervalo do git a revisar. Por isso foi usado `$ARGUMENTS`, e não
+`$1`/`$2`.
+
+| Uso | O que revisa |
+|---|---|
+| `/check-conventions` | Alterações ainda não commitadas, incluindo arquivos novos |
+| `/check-conventions main..HEAD` | Os commits do branch atual em relação à `main` |
+| `/check-conventions HEAD~2` | Da referência indicada até a working tree |
+
+O frontmatter define `description`, `argument-hint` (dica exibida ao digitar o comando) e
+`allowed-tools`, que libera sem confirmação só comandos de leitura do git, `npm test`,
+`npm run lint` e as ferramentas de leitura de arquivos.
+
+## Checklist (10 itens)
+
+1. Um router por recurso, montado no `server.js` no caminho base no plural.
+2. Estado só no `db/store.js`; helpers novos exportados; dados de exemplo em `seed()`.
+3. Helpers devolvem `undefined` para registro inexistente, e a rota responde `404`.
+4. Validação na rota com `400`; ids convertidos com `Number(req.params.id)`.
+5. Erros sempre no formato `{ "error": "message" }`.
+6. Status codes: `201` na criação, `204` sem corpo na exclusão, `200` nos demais; `return res...`.
+7. Comentário `// METHOD /path — ...` acima de cada rota.
+8. Testes com `node:test` + `supertest` e `store.reset()`, cobrindo sucesso e cada `400`/`404`.
+9. Entrada `### METHOD /path` no `docs/api.md` com todos os status.
+10. `npm test` e `npm run lint` passando.
+
+O relatório sai como tabela (✅ / ❌ / N/A com `arquivo:linha`), com uma sugestão de correção para
+cada ❌ e o veredito **pronto para commit** ou **precisa de ajustes (N itens)**.
+
+## Teste
+
+Executado como `/check-conventions 8c2eb9a..HEAD`, sobre os commits da tarefa anterior (skill,
+`DELETE /users/:id` e `NOTES.md`):
+
+- Itens 2 a 10 com ✅, e o item 1 como N/A (nenhum router novo). `npm test` passou com 7 de 7
+  testes e o lint passou sem avisos. Veredito: **pronto para commit**.
+- O comando separou corretamente os arquivos de documentação e configuração
+  (`SKILL.md`, `NOTES.md`) dos arquivos de código.
+- Também apontou dois pontos em código anterior ao intervalo, sem bloquear o commit: os ramos de
+  `400` de `POST /users` e `PUT /users/:id` não têm teste, e um id que não é número
+  (`/users/abc`) devolve `404`, e não `400`.
+- O resultado foi o esperado, e o prompt não precisou de ajuste.
