@@ -347,3 +347,60 @@ O `--fix` corrige pouco neste projeto: as regras do `eslint:recommended` (ESLint
 têm correção automática (um `;;` ficou intacto no teste). O valor do hook está em cobrar o
 padrão de lint a cada edição, em vez de esperar o `npm run lint` ou o CI. Para formatação de
 verdade, o caminho seria adicionar o Prettier ao projeto e chamá-lo no mesmo hook.
+
+# Tarefa sem supervisão: `claude -p` (headless)
+
+## A tarefa
+
+Adicionar os testes que faltavam para os ramos `400` de `POST /users` e `PUT /users/:id`, um
+ponto que o `/check-conventions` apontou na tarefa anterior. É uma tarefa pequena e bem
+delimitada: ler o código, editar um único arquivo de teste e rodar os testes.
+
+## O comando
+
+```bash
+claude -p "In tests/users.test.js, add the missing tests for the 400 branches of the users routes: POST /users without email, and PUT /users/:id with an empty body. Follow the existing style in that file (node:test, supertest, assert.equal on status, and also assert res.body.error). Read routes/users.js to get the exact error messages. Only edit tests/users.test.js. Then run exactly: npm test — and report how many tests passed." \
+  --allowedTools "Read" "Edit(tests/users.test.js)" "Bash(npm test)" \
+  --permission-mode dontAsk \
+  --max-turns 10 \
+  --output-format text
+```
+
+## O que foi liberado e por quê
+
+| Ferramenta | Por quê |
+|---|---|
+| `Read` | Ler `routes/users.js` para pegar as mensagens de erro exatas e ler o arquivo de teste para seguir o estilo. Ler não altera nada. |
+| `Edit(tests/users.test.js)` | Editar **só esse arquivo**. Qualquer tentativa de mexer em rota, store ou configuração é negada. |
+| `Bash(npm test)` | **Só esse comando exato**, para validar o resultado. `npm install`, `git` ou qualquer outro comando continua bloqueado. |
+
+Ficou de fora de propósito: `Write` (não há arquivo novo a criar), `Edit` em outros arquivos,
+qualquer outro comando de terminal, `WebFetch` e as ferramentas de MCP.
+
+Outros parâmetros:
+
+- **`--permission-mode dontAsk`:** tudo que não está na lista é recusado na hora, sem pergunta.
+  Sem ninguém olhando, uma pergunta ficaria sem resposta.
+- **`--max-turns 10`:** limita quantas rodadas a sessão pode fazer, para ela não ficar em loop.
+- O prompt repete os limites ("Only edit tests/users.test.js", "run exactly: npm test"). Assim
+  o modelo não tenta algo que a lista de ferramentas negaria, como `npm test 2>&1`.
+
+As regras `deny` do `.claude/settings.local.json` e o hook de lint do `.claude/settings.json`
+também valem no modo headless.
+
+## Resultado
+
+Saída da sessão headless (exit 0):
+
+```
+All 9 tests passed, including the two new 400 tests:
+- ✔ POST /users without email returns 400
+- ✔ PUT /users/:id with empty body returns 400
+```
+
+Conferido depois, sem confiar só no relatório da sessão:
+
+- `git diff` mostra só `tests/users.test.js` alterado, com dois testes novos no estilo do
+  arquivo. Eles conferem o status `400` e as mensagens `'name and email are required'` e
+  `'name or email is required'`.
+- `npm test`: 9 de 9 testes passaram. `npm run lint` passou sem avisos.
